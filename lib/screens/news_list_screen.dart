@@ -17,20 +17,32 @@ class _NewsListScreenState extends State<NewsListScreen> {
   final NewsService _service = NewsService();
   late Future<List<NewsModel>> _future;
   late Future<List<NewsModel>> _breakingFuture;
+
   String _selectedCategory = 'general';
   final TextEditingController _searchController = TextEditingController();
+  String? _searchQuery;
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      // update UI (to show/hide clear button)
+      setState(() {});
+    });
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _loadData() {
     final categoryParam =
         _selectedCategory == 'general' ? null : _selectedCategory;
     _future = _service.fetchTopHeadlines(
-        country: 'us', pageSize: 40, category: categoryParam);
+        country: 'us', pageSize: 40, category: categoryParam, q: _searchQuery);
     _breakingFuture = _service.fetchBreakingHeadlines(country: 'us', limit: 6);
   }
 
@@ -87,9 +99,39 @@ class _NewsListScreenState extends State<NewsListScreen> {
             width: 340,
             child: TextField(
               controller: _searchController,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (v) {
+                _searchQuery = v.trim().isEmpty ? null : v.trim();
+                setState(() => _loadData());
+              },
               decoration: InputDecoration(
                 hintText: 'Search news...',
                 prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              _searchController.clear();
+                              _searchQuery = null;
+                              setState(() => _loadData());
+                            },
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.search),
+                            onPressed: () {
+                              _searchQuery =
+                                  _searchController.text.trim().isEmpty
+                                      ? null
+                                      : _searchController.text.trim();
+                              setState(() => _loadData());
+                            },
+                          ),
+                        ],
+                      )
+                    : null,
                 filled: true,
                 fillColor: Colors.grey.shade100,
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -130,6 +172,8 @@ class _NewsListScreenState extends State<NewsListScreen> {
             selected: selected,
             onSelected: (v) {
               if (!v) return;
+              // clear search when switching categories (optional). Remove next line to keep search across categories.
+              // _searchController.clear(); _searchQuery = null;
               setState(() {
                 _selectedCategory = key;
                 _loadData();
@@ -217,46 +261,59 @@ class _NewsListScreenState extends State<NewsListScreen> {
       child: Hero(
         tag: heroTag,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Stack(
             children: [
               if (a.urlToImage != null)
-                Image.network(a.urlToImage!,
-                    width: double.infinity,
-                    height: 300,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Container(height: 300, color: Colors.grey.shade300))
+                Image.network(
+                  a.urlToImage!,
+                  width: double.infinity,
+                  height: 220,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      Container(color: Colors.grey.shade300, height: 220),
+                )
               else
-                Container(height: 300, color: Colors.grey.shade300),
+                Container(height: 220, color: Colors.grey.shade300),
               Positioned(
                 left: 16,
+                right: 16,
                 bottom: 16,
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8)),
+                    gradient: LinearGradient(colors: [
+                      Colors.black.withOpacity(0.6),
+                      Colors.transparent
+                    ]),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: MediaQuery.of(context).size.width - 80,
-                          child: Text(a.title ?? '(No title)',
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        a.title ?? '(No title)',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(a.sourceName ?? 'Unknown',
                               style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                            '${a.sourceName ?? 'Unknown'} • ${_formatDate(a.publishedAt)}',
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12)),
-                      ]),
+                                  color: Colors.white70, fontSize: 12)),
+                          const SizedBox(width: 8),
+                          Text(_formatDate(a.publishedAt),
+                              style: const TextStyle(
+                                  color: Colors.white70, fontSize: 12)),
+                        ],
+                      )
+                    ],
+                  ),
                 ),
               )
             ],
@@ -272,7 +329,7 @@ class _NewsListScreenState extends State<NewsListScreen> {
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => NewsDetailScreen(article: a, heroTag: heroTag))),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
           children: [
             Hero(
@@ -280,49 +337,51 @@ class _NewsListScreenState extends State<NewsListScreen> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: a.urlToImage != null
-                    ? Image.network(a.urlToImage!,
-                        width: 160,
-                        height: 100,
+                    ? Image.network(
+                        a.urlToImage!,
+                        width: 110,
+                        height: 78,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => Container(
-                            width: 160,
-                            height: 100,
-                            color: Colors.grey.shade200))
+                            width: 110,
+                            height: 78,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image)),
+                      )
                     : Container(
-                        width: 160, height: 100, color: Colors.grey.shade200),
+                        width: 110,
+                        height: 78,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image)),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: SizedBox(
-                height: 100,
+                height: 78,
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(a.title ?? '(No title)',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontSize: 16, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 8),
-                      Text(a.description ?? '',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey.shade700)),
-                      const Spacer(),
-                      Row(children: [
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(a.title ?? '(No title)',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const Spacer(),
+                    Row(
+                      children: [
                         Text(a.sourceName ?? 'Unknown',
                             style: TextStyle(
                                 color: Colors.grey.shade700, fontSize: 12)),
                         const SizedBox(width: 8),
-                        Text('•',
-                            style: TextStyle(color: Colors.grey.shade500)),
+                        const Text('•', style: TextStyle(color: Colors.grey)),
                         const SizedBox(width: 8),
                         Text(_formatDate(a.publishedAt),
                             style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 12))
-                      ])
-                    ]),
+                                color: Colors.grey.shade600, fontSize: 12)),
+                      ],
+                    )
+                  ],
+                ),
               ),
             )
           ],

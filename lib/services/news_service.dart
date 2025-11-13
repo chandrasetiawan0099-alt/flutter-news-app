@@ -23,6 +23,7 @@ class NewsService {
     String country = 'us',
     int pageSize = 25,
     String? category,
+    String? q, // <-- search query (optional)
   }) async {
     final params = <String, String>{
       'country': country,
@@ -30,6 +31,7 @@ class NewsService {
       'apiKey': _apiKey,
     };
     if (category != null && category.isNotEmpty) params['category'] = category;
+    if (q != null && q.trim().isNotEmpty) params['q'] = q.trim();
     final uri = Uri.parse(_base).replace(queryParameters: params);
     final res = await http.get(uri);
     if (res.statusCode == 200) {
